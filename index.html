@@ -4,53 +4,87 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script src="pouchdb.js"></script>
+    <script src="pouchdb.indexeddb.js"></script>
     <title>Document</title>
   </head>
   <body>
-    <h1>Hi</h1>
+    <h1>PouchDB activeTasks testing</h1>
+
+    <p>You can run the following functions in your browser's console:</p>
+    <ul>
+      <li>
+        <code>compactDatabase(n)</code>: Create <code>n</code> dummy documents
+        in a dummy database and run a compaction task on it.
+      </li>
+      <li>
+        <code>replicate()</code>: Run a replication between two dummy databases.
+      </li>
+    </ul>
+
     <script>
-      PouchDB.prototype.activeTasks.add = new Proxy(PouchDB.prototype.activeTasks.add, {
-        apply: (target, thisArg, argumentsList) => {
-          const task = argumentsList[0];
-          console.log(
-            `➕ Added Task "${task.name}" with ${task.total_items} total items`
-          );
-          return Reflect.apply(target, PouchDB.prototype.activeTasks, argumentsList);
-        },
-      });
+      PouchDB.prototype.activeTasks.add = new Proxy(
+        PouchDB.prototype.activeTasks.add,
+        {
+          apply: (target, thisArg, argumentsList) => {
+            const task = argumentsList[0];
+            console.log(
+              `➕ Added Task "${task.name}" with ${task.total_items} total items`
+            );
+            return Reflect.apply(
+              target,
+              PouchDB.prototype.activeTasks,
+              argumentsList
+            );
+          },
+        }
+      );
 
-      PouchDB.prototype.activeTasks.update = new Proxy(PouchDB.prototype.activeTasks.update, {
-        apply: (target, thisArg, argumentsList) => {
-          const task = PouchDB.prototype.activeTasks.get(argumentsList[0]);
-          const durationInMilliseconds =
-            new Date().getTime() - new Date(task.created_at).getTime();
-          console.log(
-            `🖌️ Updated Task "${task.name}" (${task.id}) with ${
-              argumentsList[1].completed_items
-            }/${task.total_items} items after ${
-              durationInMilliseconds / 1000
-            } seconds`
-          );
-          return Reflect.apply(target, PouchDB.prototype.activeTasks, argumentsList);
-        },
-      });
+      PouchDB.prototype.activeTasks.update = new Proxy(
+        PouchDB.prototype.activeTasks.update,
+        {
+          apply: (target, thisArg, argumentsList) => {
+            const task = PouchDB.prototype.activeTasks.get(argumentsList[0]);
+            const durationInMilliseconds =
+              new Date().getTime() - new Date(task.created_at).getTime();
+            console.log(
+              `🖌️ Updated Task "${task.name}" (${task.id}) with ${
+                argumentsList[1].completed_items
+              }/${task.total_items} items after ${
+                durationInMilliseconds / 1000
+              } seconds`
+            );
+            return Reflect.apply(
+              target,
+              PouchDB.prototype.activeTasks,
+              argumentsList
+            );
+          },
+        }
+      );
 
-      PouchDB.prototype.activeTasks.remove = new Proxy(PouchDB.prototype.activeTasks.remove, {
-        apply: (target, thisArg, argumentsList) => {
-          const task = PouchDB.prototype.activeTasks.get(argumentsList[0]);
-          const durationInMilliseconds =
-            new Date(task.updated_at).getTime() -
-            new Date(task.created_at).getTime();
-          console.log(
-            `✅ Removed/Completed Task "${task.name}" (${task.id}) with ${
-              task.completed_items
-            }/${task.total_items} items after ${
-              durationInMilliseconds / 1000
-            } seconds`
-          );
-          return Reflect.apply(target, PouchDB.prototype.activeTasks, argumentsList);
-        },
-      });
+      PouchDB.prototype.activeTasks.remove = new Proxy(
+        PouchDB.prototype.activeTasks.remove,
+        {
+          apply: (target, thisArg, argumentsList) => {
+            const task = PouchDB.prototype.activeTasks.get(argumentsList[0]);
+            const durationInMilliseconds =
+              new Date(task.updated_at).getTime() -
+              new Date(task.created_at).getTime();
+            console.log(
+              `✅ Removed/Completed Task "${task.name}" (${task.id}) with ${
+                task.completed_items
+              }/${task.total_items} items after ${
+                durationInMilliseconds / 1000
+              } seconds`
+            );
+            return Reflect.apply(
+              target,
+              PouchDB.prototype.activeTasks,
+              argumentsList
+            );
+          },
+        }
+      );
 
       function sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
@@ -94,27 +128,39 @@
         PouchDB.activeTasks.remove(id3);
       }
 
-      async function runCompactionTask(createDocs = false) {
-        const n = 100;
-        const name = "activeTasks-test";
-        const db = new PouchDB(name, { adapter: "idb" });
-
-        if (createDocs) {
-          for (let i = 0; i < n; i++) {
-            await db.put({
-              _id: `dummy-${i}`,
-              title: `Dummy item ${i}`,
-            });
-          }
+      async function createDummyDocs(db, n = 100) {
+        for (let i = 0; i < n; i++) {
+          await db.put({
+            _id: `dummy-${i}`,
+            title: `Dummy item ${i}`,
+          });
         }
-
-        console.log("Executing compaction...");
-        db._compact({}, () => {
-          console.log("Compaction finished.");
-        });
       }
 
-      runCompactionTask();
+      async function replicate() {
+        const src = new PouchDB("replication-test-src", {
+          adapter: "indexeddb",
+        });
+        const dst = new PouchDB("replication-test-dst", {
+          adapter: "indexeddb",
+        });
+
+        await createDummyDocs(src, 1000);
+        await src.replicate.to(dst);
+
+        await src.destroy();
+        await dst.destroy();
+      }
+
+      async function compactDatabase(n = 1000) {
+        const db = new PouchDB("database-compaction-test", {
+          adapter: "indexeddb",
+        });
+        await createDummyDocs(db, n);
+        db._compact({}, () => {
+          db.destroy();
+        });
+      }
     </script>
   </body>
 </html>
