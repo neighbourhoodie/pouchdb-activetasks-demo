@@ -17,12 +17,16 @@
         in a dummy database and run a compaction task on it.
       </li>
       <li>
-        <code>replicate()</code>: Run a replication between two dummy databases.
+        <code>replicate(n1, n2)</code>: Run a replication between two dummy
+        databases. First, `n1` docs will be created on the source database and
+        replicated to the destination database. Then, another `n2` docs will be
+        created. The subsequent replication will make use of a checkpoint and
+        replicate only the newer docs to the replication database.
       </li>
     </ul>
 
     <script>
-      let j = 0
+      let j = 0;
 
       PouchDB.prototype.activeTasks.add = new Proxy(
         PouchDB.prototype.activeTasks.add,
