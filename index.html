@@ -22,6 +22,8 @@
     </ul>
 
     <script>
+      let j = 0
+
       PouchDB.prototype.activeTasks.add = new Proxy(
         PouchDB.prototype.activeTasks.add,
         {
@@ -129,15 +131,15 @@
       }
 
       async function createDummyDocs(db, n = 100) {
-        for (let i = 0; i < n; i++) {
+        for (let i = 0; i < n; i++, j++) {
           await db.put({
-            _id: `dummy-${i}`,
-            title: `Dummy item ${i}`,
+            _id: `dummy-${j}`,
+            title: `Dummy item ${j}`,
           });
         }
       }
 
-      async function replicate() {
+      async function replicate(n1 = 1000, n2 = 100) {
         const src = new PouchDB("replication-test-src", {
           adapter: "indexeddb",
         });
@@ -145,7 +147,16 @@
           adapter: "indexeddb",
         });
 
-        await createDummyDocs(src, 1000);
+        console.log(`~~~ creating ${n1} dummy docs`);
+        await createDummyDocs(src, n1);
+
+        console.log("~~~ replicating (1)");
+        await src.replicate.to(dst);
+
+        console.log(`~~~ creating ${n2} dummy docs`);
+        await createDummyDocs(src, n2);
+
+        console.log("~~~ replicating (2)");
         await src.replicate.to(dst);
 
         await src.destroy();
