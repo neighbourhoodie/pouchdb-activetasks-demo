@@ -23,6 +23,11 @@
         created. The subsequent replication will make use of a checkpoint and
         replicate only the newer docs to the replication database.
       </li>
+      <li>
+        <code>indexView(n, destroy)</code>: Create a view on a temporary
+        database that has `n` documents. Then, update the index by running a
+        query.
+      </li>
     </ul>
 
     <script>
@@ -138,6 +143,7 @@
         for (let i = 0; i < n; i++, j++) {
           await db.put({
             _id: `dummy-${j}`,
+            index: j,
             title: `Dummy item ${j}`,
           });
         }
@@ -175,6 +181,32 @@
         db._compact({}, () => {
           db.destroy();
         });
+      }
+
+      async function indexView(n = 1000, destroy = true) {
+        const db = new PouchDB("view-indexing-test", {
+          adapter: "indexeddb",
+        });
+        await createDummyDocs(db, n);
+        await db.put({
+          _id: "_design/my_index",
+          views: {
+            by_index: {
+              map: function (doc) {
+                emit(doc.index);
+              }.toString(),
+            },
+          },
+        });
+
+        // the _design doc will create one further doc in the database, so we
+        // will iterate over n+1 changes here (which is okay by design), but
+        // the query will return n docs and ignore the _design doc.
+        console.log(await db.query("my_index/by_index"));
+
+        if (destroy) {
+          await db.destroy();
+        }
       }
     </script>
   </body>
