@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script src="pouchdb.js"></script>
     <script src="pouchdb.indexeddb.js"></script>
+    <script src="pouchdb.find.js"></script>
     <title>Document</title>
   </head>
   <body>
@@ -13,25 +14,42 @@
     <p>You can run the following functions in your browser's console:</p>
     <ul>
       <li>
+        <code>runDummyTasks()</code>: Run some dummy tasks to test the API.
+      </li>
+      <li>
         <code>compactDatabase(n)</code>: Create <code>n</code> dummy documents
         in a dummy database and run a compaction task on it.
       </li>
       <li>
         <code>replicate(n1, n2)</code>: Run a replication between two dummy
-        databases. First, `n1` docs will be created on the source database and
-        replicated to the destination database. Then, another `n2` docs will be
-        created. The subsequent replication will make use of a checkpoint and
-        replicate only the newer docs to the replication database.
+        databases. First, <code>n1</code> docs will be created on the source
+        database and replicated to the destination database. Then, another
+        <code>n2</code> docs will be created. The subsequent replication will
+        make use of a checkpoint and replicate only the newer docs to the
+        replication database.
       </li>
       <li>
         <code>indexView(n, destroy)</code>: Create a view on a temporary
-        database that has `n` documents. Then, update the index by running a
-        query.
+        database that has <code>n</code> documents. Then, update the index by
+        running a query.
+      </li>
+      <li>
+        <code>createFindIndex(n, q)</code>: Create a search/find index on the
+        title field of a temporary database that has <code>n</code> documents.
+        Then, search that index for query <code>q</code>. In order to see
+        activeTasks support here, set <code>USE_INDEXEDDB_ADAPTER</code> to
+        false, so the find implementation uses the underlying
+        <code>p-a-m</code> module for indexing instead of IndexedDB indexes.
       </li>
     </ul>
+    <p>
+      You can set <code>USE_INDEXEDDB_ADAPTER</code> to true or false in order
+      to choose between the indexeddb or idb adapter.
+    </p>
 
     <script>
       let j = 0;
+      let USE_INDEXEDDB_ADAPTER = true;
 
       PouchDB.prototype.activeTasks.add = new Proxy(
         PouchDB.prototype.activeTasks.add,
@@ -149,13 +167,14 @@
         }
       }
 
+      function createPouchDB(name) {
+        const adapter = USE_INDEXEDDB_ADAPTER ? "indexeddb" : "idb";
+        return new PouchDB(name, { adapter });
+      }
+
       async function replicate(n1 = 1000, n2 = 100) {
-        const src = new PouchDB("replication-test-src", {
-          adapter: "indexeddb",
-        });
-        const dst = new PouchDB("replication-test-dst", {
-          adapter: "indexeddb",
-        });
+        const src = createPouchDB("replication-test-src");
+        const dst = createPouchDB("replication-test-dst");
 
         console.log(`~~~ creating ${n1} dummy docs`);
         await createDummyDocs(src, n1);
@@ -174,9 +193,7 @@
       }
 
       async function compactDatabase(n = 1000) {
-        const db = new PouchDB("database-compaction-test", {
-          adapter: "indexeddb",
-        });
+        const db = createPouchDB("database-compaction-test");
         await createDummyDocs(db, n);
         db._compact({}, () => {
           db.destroy();
@@ -184,9 +201,7 @@
       }
 
       async function indexView(n = 1000, destroy = true) {
-        const db = new PouchDB("view-indexing-test", {
-          adapter: "indexeddb",
-        });
+        const db = createPouchDB("view-indexing-test");
         await createDummyDocs(db, n);
         await db.put({
           _id: "_design/my_index",
@@ -203,6 +218,32 @@
         // will iterate over n+1 changes here (which is okay by design), but
         // the query will return n docs and ignore the _design doc.
         console.log(await db.query("my_index/by_index"));
+
+        if (destroy) {
+          await db.destroy();
+        }
+      }
+
+      async function createFindIndex(
+        n = 1000,
+        q = "Dummy item 499",
+        opts = {}
+      ) {
+        const destroy = opts.destroy === false ? false : true;
+
+        const db = createPouchDB("create-find-index-test");
+        await createDummyDocs(db, n);
+        await db.createIndex({
+          index: { fields: ["title"] },
+        });
+
+        console.log(
+          await db.find({
+            selector: {
+              title: { $eq: q },
+            },
+          })
+        );
 
         if (destroy) {
           await db.destroy();
