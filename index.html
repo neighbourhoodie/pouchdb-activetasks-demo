@@ -96,16 +96,29 @@
         {
           apply: (target, thisArg, argumentsList) => {
             const task = PouchDB.prototype.activeTasks.get(argumentsList[0]);
+            const err = argumentsList[1];
+
             const durationInMilliseconds =
               new Date(task.updated_at).getTime() -
               new Date(task.created_at).getTime();
-            console.log(
-              `✅ Removed/Completed Task "${task.name}" (${task.id}) with ${
-                task.completed_items
-              }/${task.total_items} items after ${
-                durationInMilliseconds / 1000
-              } seconds`
-            );
+
+            if (!err) {
+              console.log(
+                `✅ Removed/Completed Task "${task.name}" (${task.id}) with ${
+                  task.completed_items
+                }/${task.total_items} items after ${
+                  durationInMilliseconds / 1000
+                } seconds`
+              );
+            } else {
+              console.log(
+                `❌ Failed Task "${task.name}" (${task.id}) with ${
+                  task.completed_items
+                }/${task.total_items} items after ${
+                  durationInMilliseconds / 1000
+                } seconds. Reason: ${err}`
+              );
+            }
             return Reflect.apply(
               target,
               PouchDB.prototype.activeTasks,
