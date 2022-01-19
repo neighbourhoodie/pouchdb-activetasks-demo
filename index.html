@@ -17,11 +17,19 @@
         in a dummy database and run a compaction task on it.
       </li>
       <li>
-        <code>replicate(n1, n2)</code>: Run a replication between two dummy
+        <code>replicate(n1, n2, [doCleanup = true])</code>: Run a replication between two dummy
         databases. First, `n1` docs will be created on the source database and
         replicated to the destination database. Then, another `n2` docs will be
         created. The subsequent replication will make use of a checkpoint and
         replicate only the newer docs to the replication database.
+        Pass in <code>false</code> as the third param to leave the DBs in place.
+      </li>
+      <li>
+        <code>replicateLive(n1, n2, [doCleanup = true])</code>: Run a live replication between two dummy
+        databases. First, `n1` docs will be created on the source database and
+        a live replication to the destination database started. Then, another `n2` docs will be
+        created, which should also be replicated.
+        Pass in <code>false</code> as the third param to leave the DBs in place.
       </li>
       <li>
         <code>indexView(n, destroy)</code>: Create a view on a temporary
@@ -60,7 +68,7 @@
             console.log(
               `🖌️ Updated Task "${task.name}" (${task.id}) with ${
                 argumentsList[1].completed_items
-              }/${task.total_items} items after ${
+              }/${argumentsList[1].total_items || task.total_items} items after ${
                 durationInMilliseconds / 1000
               } seconds`
             );
@@ -149,7 +157,7 @@
         }
       }
 
-      async function replicate(n1 = 1000, n2 = 100) {
+      async function replicate(n1 = 1000, n2 = 100, doCleanup = true) {
         const src = new PouchDB("replication-test-src", {
           adapter: "indexeddb",
         });
@@ -169,8 +177,57 @@
         console.log("~~~ replicating (2)");
         await src.replicate.to(dst);
 
-        await src.destroy();
-        await dst.destroy();
+        if (doCleanup) {
+          await src.destroy();
+          await dst.destroy();
+          console.log('~~~ 🧹 cleaned up replication DBs')
+        }
+      }
+
+      async function replicateLive(n1 = 1000, n2 = 100, doCleanup = true) {
+        const src = new PouchDB("live-replication-test-src", {
+          adapter: "indexeddb",
+        });
+        const dst = new PouchDB("live-replication-test-dst", {
+          adapter: "indexeddb",
+        });
+
+        console.log(`~~~ creating ${n1} dummy docs`);
+        await createDummyDocs(src, n1);
+
+        console.log("~~~ starting continuous replication (1)");
+        const liveReplication = PouchDB.replicate(src, dst, {live: true})
+        // .on('change', function (info) {
+        //   console.log('~~~ live replication change', info)
+        // }).on('paused', function (err) {
+        //   console.log('~~~ live replication paused', err)
+        // }).on('active', function () {
+        //   console.log('~~~ live replication active')
+        // }).on('denied', function (err) {
+        //   console.log('~~~ live replication denied', err)
+        // }).on('complete', function (info) {
+        //   console.log('~~~ live replication complete', info)
+        // }).on('error', function (err) {
+        //   console.log('~~~ live replication error', err)
+        // });
+
+        console.log("~~~ waiting a bit");
+        await sleep(3000);
+
+        console.info(`~~~ creating ${n2} dummy docs`);
+        await createDummyDocs(src, n2);
+        console.info(`~~~ created ${n2} dummy docs, sync should restart`);
+
+        console.log("~~~ waiting a bit longer");
+        await sleep(3000);
+
+        liveReplication.cancel()
+
+        if (doCleanup) {
+          await src.destroy();
+          await dst.destroy();
+          console.log('~~~ 🧹 cleaned up live replication DBs')
+        }
       }
 
       async function compactDatabase(n = 1000) {
